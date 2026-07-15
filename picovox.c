@@ -16,10 +16,10 @@
 #include "mode_switch/mode_switch.h"
 
 // List of all devices
-#define NUM_DEVICES 8
+#define NUM_DEVICES 9
 device_t *devices[NUM_DEVICES];
-int8_t current_device = 0;
-int8_t wanted_device = 0;
+int8_t current_device = 4;
+int8_t wanted_device = 4;
 
 bool load_device_list() {
     devices[0] = create_covox();
@@ -30,6 +30,7 @@ bool load_device_list() {
     devices[5] = create_tandy();
     devices[6] = create_cms();
     devices[7] = create_opl3();
+    devices[8] = create_sid();
 
     for (int i = 0; i < NUM_DEVICES; i++) {
         if (devices[i] == NULL) {

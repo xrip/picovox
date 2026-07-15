@@ -62,6 +62,18 @@ add_executable(picovox
         dbopl/dbopl.cpp
         dbopl/dbopl_c.cpp)
 
+target_compile_options(picovox PRIVATE
+    -Wall
+    -Wextra
+    -Wpedantic
+    -Wshadow
+    -Wconversion
+    -Wsign-conversion
+    -Warray-bounds
+    -Wnull-dereference
+    -Wdouble-promotion
+)
+
 # Add all PIOs to compile
 pico_generate_pio_header(${PROJECT_NAME}
     ${PIO_PATH}/covox.pio

@@ -2,6 +2,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include "device.h"
 #include "pio_manager.h"
 #include "ringbuffer.h"
@@ -58,7 +59,7 @@ static void load_new_instruction(int16_t *register_address, opl2_chip* opl) {
 
 static void core1_operation(void) {
     OPL2_Reset(&opl_chip, SAMPLE_RATE/SAMPLE_REPEAT);
-    int16_t buf[2];
+    int16_t current_sample = 0;
     int16_t register_address = 0;
 
     while (!stop_core1) {
@@ -68,14 +69,14 @@ static void core1_operation(void) {
             load_new_instruction(&register_address, &opl_chip);
         }
 
-        OPL2_GenerateResampled(&opl_chip, buf);
+        OPL2_GenerateResampled(&opl_chip, &current_sample);
 
         // While ringbuffer is full, load new instructions
         while (ringbuffer_is_full() && !stop_core1) {
             load_new_instruction(&register_address, &opl_chip);
         }
 
-        ringbuffer_push(buf[0]);
+        ringbuffer_push(current_sample);
     }
 }
 

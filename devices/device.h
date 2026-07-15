@@ -48,5 +48,6 @@ device_t *create_opl2();
 device_t *create_tandy();
 device_t *create_cms();
 device_t *create_opl3();
+device_t *create_sid();
 
 #endif // DEVICE_H

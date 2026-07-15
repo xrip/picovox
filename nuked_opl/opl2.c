@@ -776,6 +776,121 @@ static void OPL2_UpdateChannelParams(opl2_chip *chip, uint8_t slot)
 
 static OPL2_FORCE_INLINE void OPL2_ProcessSlot(opl2_slot *slot)
 {
+    /* Effective key includes the CSM key-on pulse, matching OPL2_EnvelopeCalc. */
+    uint8_t key = slot->key | slot->chip->csm_kon;
+
+    /* Fast path for fully-attenuated key-off non-rhythm slots. The envelope
+     * rate machine cannot change eg_rout here, so eg_out, eg_gen, eg_mute,
+     * pg_reset, phase output, noise, and out are updated inline. */
+    if (!key && slot->eg_rout == 0x1ff
+        && slot->slot_num != 13 && slot->slot_num != 16 && slot->slot_num != 17)
+    {
+        opl2_chip *chip = slot->chip;
+        uint32_t phaseinc;
+        uint16_t phase;
+        uint32_t noise = chip->noise;
+        uint8_t n_bit = ((noise >> 14) ^ noise) & 0x01;
+
+        if (slot->channel->fb == 0 && slot->pg_inc == 0 && slot->out == 0
+            && *slot->mod == 0 && slot->eg_tl_ksl == 0 && *slot->trem == 0
+            && slot->pg_phase == 0 && slot->reg_vib == 0 && slot->reg_wf == 0)
+        {
+            slot->fbmod = 0;
+            slot->prout = 0;
+            slot->eg_out = 0x1ff;
+            slot->eg_mute = 1;
+            slot->pg_reset = 0;
+            slot->eg_gen = envelope_gen_num_release;
+            slot->pg_phase_out = 0;
+            chip->noise = (noise >> 1) | (n_bit << 22);
+            return;
+        }
+
+        OPL2_SlotCalcFB(slot);
+
+        slot->eg_out = slot->eg_rout + slot->eg_tl_ksl + *slot->trem;
+        /* eg_rout == 0x1ff => eg_off, so the full path leaves eg_mute set
+         * whenever eg_gen is past attack; it then forces eg_gen to release. */
+        slot->eg_mute = slot->eg_gen != envelope_gen_num_attack;
+        slot->pg_reset = 0;
+        slot->eg_gen = envelope_gen_num_release;
+
+        if (slot->reg_vib)
+        {
+            uint16_t f_num = slot->channel->f_num;
+            int8_t range = (f_num >> 7) & 7;
+            uint8_t vibpos = chip->vibpos;
+
+            if (!(vibpos & 3))
+            {
+                range = 0;
+            }
+            else if (vibpos & 1)
+            {
+                range >>= 1;
+            }
+            range >>= chip->vibshift;
+
+            if (vibpos & 4)
+            {
+                range = -range;
+            }
+            f_num += range;
+            phaseinc = (((uint32_t)f_num << slot->channel->block) >> 1)
+                     * mt[slot->reg_mult] >> 1;
+        }
+        else
+        {
+            phaseinc = slot->pg_inc;
+        }
+
+        phase = (uint16_t)(slot->pg_phase >> 9);
+        slot->pg_phase += phaseinc;
+        slot->pg_phase_out = phase;
+        chip->noise = (noise >> 1) | (n_bit << 22);
+
+        /* eg_out = eg_rout + eg_tl_ksl + *trem >= 0x1ff here, so the
+         * silent-regime shortcut is always valid. */
+        OPL2_SlotGenerateSilent(slot);
+        return;
+    }
+    /* Fast path for sustain phase held with key on and a sustain rate of zero:
+     * the envelope cannot move, so only the eg_off clamp and eg_mute need
+     * updating before phase and waveform generation. */
+    if (slot->eg_gen == envelope_gen_num_sustain && key
+        && slot->eg_rates[envelope_gen_num_sustain] == 0)
+    {
+        uint8_t eg_off;
+        OPL2_SlotCalcFB(slot);
+        slot->eg_out = slot->eg_rout + slot->eg_tl_ksl + *slot->trem;
+        slot->pg_reset = 0;
+        eg_off = (slot->eg_rout & 0x1f8) == 0x1f8;
+        slot->eg_mute = eg_off;
+        if (eg_off)
+        {
+            slot->eg_rout = 0x1ff;
+        }
+
+        if (!slot->reg_vib
+            && slot->slot_num != 13 && slot->slot_num != 16 && slot->slot_num != 17)
+        {
+            opl2_chip *chip = slot->chip;
+            uint32_t noise = chip->noise;
+            uint8_t n_bit = ((noise >> 14) ^ noise) & 0x01;
+            uint16_t phase = (uint16_t)(slot->pg_phase >> 9);
+
+            slot->pg_phase += slot->pg_inc;
+            slot->pg_phase_out = phase;
+            chip->noise = (noise >> 1) | (n_bit << 22);
+        }
+        else
+        {
+            OPL2_PhaseGenerate(slot);
+        }
+
+        OPL2_SlotGenerate(slot);
+        return;
+    }
     OPL2_SlotCalcFB(slot);
     OPL2_EnvelopeCalc(slot);
     OPL2_PhaseGenerate(slot);

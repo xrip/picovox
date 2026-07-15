@@ -41,4 +41,5 @@ int8_t pio_manager_get_irq(PIO pio) {
     if (pio == pio2) {
         return PIO2_IRQ_0;
     }
+    return 0;
 }

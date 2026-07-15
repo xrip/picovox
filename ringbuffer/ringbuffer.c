@@ -1,6 +1,6 @@
 #include "ringbuffer.h"
 
-#define MAX_SIZE 4096 // Specifies maximal available size accross all devices
+#define MAX_SIZE 8192 // Specifies maximal available size accross all devices
 
 static volatile size_t head = 0;
 static volatile  size_t tail = 0;
