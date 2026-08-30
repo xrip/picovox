@@ -54,7 +54,7 @@ add_executable(picovox
         devices/opl3.c 
         devices/tandy.c 
         devices/cms.c 
-        devices/debugger.c 
+        devices/sid.c 
         mode_switch/mode_switch.c
         square/square.cpp 
         square/square_c.cpp
@@ -84,12 +84,12 @@ pico_generate_pio_header(${PROJECT_NAME}
     ${PIO_PATH}/opl3.pio
     ${PIO_PATH}/tandy.pio
     ${PIO_PATH}/cms.pio
+    ${PIO_PATH}/sid.pio
     ${CMAKE_CURRENT_LIST_DIR}/mode_switch/mode_switch.pio
-    ${PIO_PATH}/debugger.pio
 )
 
 pico_set_program_name(picovox "picovox")
-pico_set_program_version(picovox "0.1")
+pico_set_program_version(picovox "0.2")
 
 # Modify the below lines to enable/disable output over UART/USB
 pico_enable_stdio_uart(picovox 0)
