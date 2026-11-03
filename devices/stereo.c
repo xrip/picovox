@@ -1,13 +1,13 @@
 #include "config.h"
 #include <stdint.h>
 #include <stdbool.h>
-#include <stdlib.h>
 #include "device.h"
 #include "pio_manager.h"
 #include "ringbuffer.h"
 #include "hardware/clocks.h"
 #include "hardware/pwm.h"
 #include "stereo.pio.h"
+#include "passthrough.pio.h"
 
 #define STEREO_RINGBUFFER_SIZE 2048
 
@@ -43,7 +43,7 @@ static void get_samples(void) {
     ringbuffer_push(last_right_sample);
 }
 
-bool load_stereo() {
+bool load_stereo(void) {
     ringbuffer_init(STEREO_RINGBUFFER_SIZE);
 
     // Load PIO programs
@@ -59,7 +59,7 @@ bool load_stereo() {
         return false;
     }
 
-    detection_offset = pio_manager_load(&detection_pio, &detection_sm, &stereo_detection_program);
+    detection_offset = pio_manager_load(&detection_pio, &detection_sm, &passthrough_program);
 
     if (detection_offset < 0) {
         return false;
@@ -104,7 +104,7 @@ bool load_stereo() {
     pio_sm_set_enabled(sound_right_pio, sound_right_sm, true);
 
     // Configure detection PIO GPIO pins
-    pio_sm_config used_config_detection = stereo_detection_program_get_default_config(detection_offset);
+    pio_sm_config used_config_detection = passthrough_program_get_default_config(detection_offset);
     sm_config_set_in_pins(&used_config_detection, LPT_BASE_PIN + 7); // Requires D7 pin of LPT
     sm_config_set_out_pins(&used_config_detection, LPT_BUSY_PIN, 1);
     pio_gpio_init(detection_pio, LPT_BASE_PIN + 7);
@@ -133,7 +133,7 @@ bool load_stereo() {
     return true;
 }
 
-bool unload_stereo() {
+bool unload_stereo(void) {
 
     // Stop getting samples
     pwm_set_enabled(pwm_slice, false);
@@ -146,7 +146,7 @@ bool unload_stereo() {
     pio_sm_set_enabled(detection_pio, detection_sm, false);
     pio_manager_unload(sound_left_pio, sound_left_sm, sound_left_offset, &stereo_left_program);
     pio_manager_unload(sound_right_pio, sound_right_sm, sound_right_offset, &stereo_right_program);
-    pio_manager_unload(detection_pio, detection_sm, detection_offset, &stereo_detection_program);
+    pio_manager_unload(detection_pio, detection_sm, detection_offset, &passthrough_program);
 
     // Deinit all GPIO pins
     for (int i = LPT_BASE_PIN; i < LPT_BASE_PIN + 8; i++) {
@@ -162,7 +162,7 @@ bool unload_stereo() {
     return true;
 }
 
-size_t generate_stereo(int16_t *left_sample, int16_t *right_sample) { 
+void generate_stereo(int16_t *left_sample, int16_t *right_sample) {
 
     // Wait for sample if none is generated (cannot lock since samples are generated automatically)
     while (!ringbuffer_pop(left_sample)) {
@@ -173,8 +173,6 @@ size_t generate_stereo(int16_t *left_sample, int16_t *right_sample) {
     if (!ringbuffer_pop(right_sample)) {
         *right_sample = 0;
     }
-
-    return 0;
 }
 
 device_t *create_stereo(void) {

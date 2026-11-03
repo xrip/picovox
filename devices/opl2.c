@@ -1,14 +1,11 @@
 #include "config.h"
 #include <stdint.h>
 #include <stdbool.h>
-#include <stdlib.h>
-#include <stdio.h>
 #include "device.h"
 #include "pio_manager.h"
 #include "ringbuffer.h"
 #include "nuked_opl/opl2.h"
 #include "pico/multicore.h"
-#include "hardware/clocks.h"
 #include "opl2.pio.h"
 
 // Buffer storing samples generated
@@ -40,21 +37,12 @@ static void load_new_instruction(int16_t *register_address, opl2_chip* opl) {
 
     uint16_t new_instruction = (pio_sm_get(used_pio, used_sm) >> 23);
 
-    // Strobe determines address/data difference
-#if LPT_STROBE_SWAPPED
-    if ((new_instruction & 1) == 0) {
-        *register_address = (new_instruction >> 1) & 255;
-    } else {
-        OPL_Pico_WriteRegister(*register_address, ((new_instruction >> 1) & 255));
-    }
-#else
-
+    // Strobe (bit 8) determines address/data difference
     if (((new_instruction >> 8) & 1) == 0) {
         *register_address = (new_instruction & 255);
     } else {
         OPL2_WriteReg(opl, *register_address, (new_instruction & 255));
     }
-#endif
 }
 
 static void core1_operation(void) {
@@ -80,7 +68,7 @@ static void core1_operation(void) {
     }
 }
 
-bool load_opl2() {
+bool load_opl2(void) {
     ringbuffer_init(OPL_RINGBUFFER_SIZE);
 
     // Load PIO program
@@ -92,11 +80,7 @@ bool load_opl2() {
 
     // Configure PIO GPIO pins
     pio_sm_config used_config = opl2_program_get_default_config(used_offset);
-#if LPT_STROBE_SWAPPED
-    sm_config_set_in_pins(&used_config, LPT_STROBE_PIN);
-#else
     sm_config_set_in_pins(&used_config, LPT_BASE_PIN);
-#endif
     sm_config_set_fifo_join(&used_config, PIO_FIFO_JOIN_RX);
 
     for (int i = LPT_BASE_PIN; i < LPT_BASE_PIN + 8; i++) { // Set all data pins
@@ -105,11 +89,7 @@ bool load_opl2() {
 
     pio_gpio_init(used_pio, LPT_STROBE_PIN);
     pio_gpio_init(used_pio, LPT_INIT_PIN);
-#if LPT_STROBE_SWAPPED
-    pio_sm_set_consecutive_pindirs(used_pio, used_sm, LPT_STROBE_PIN, 9, false); // Set pins in PIO to be inputs
-#else
     pio_sm_set_consecutive_pindirs(used_pio, used_sm, LPT_BASE_PIN, 9, false); // Set pins in PIO to be inputs
-#endif
 
     // Start PIO program
     if (pio_sm_init(used_pio, used_sm, used_offset, &used_config) < 0) {
@@ -125,7 +105,7 @@ bool load_opl2() {
     return true;
 }
 
-bool unload_opl2() {
+bool unload_opl2(void) {
 
     // Stop core 1
     stop_core1 = true;
@@ -144,7 +124,7 @@ bool unload_opl2() {
     return true;
 }
 
-size_t generate_opl2(int16_t *left_sample, int16_t *right_sample) {
+void generate_opl2(int16_t *left_sample, int16_t *right_sample) {
 
     if (sample_used >= SAMPLE_REPEAT) {
 
@@ -164,7 +144,6 @@ size_t generate_opl2(int16_t *left_sample, int16_t *right_sample) {
     *left_sample = last_sample;
     *right_sample = last_sample;
     sample_used++;
-    return 0;
 }
 
 device_t *create_opl2(void) {

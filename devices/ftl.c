@@ -1,11 +1,12 @@
 #include "config.h"
 #include <stdint.h>
 #include <stdbool.h>
-#include <stdlib.h>
 #include "pio_manager.h"
 #include "device.h"
+#include "dac.h"
 #include "hardware/clocks.h"
-#include "ftl.pio.h"
+#include "dac.pio.h"
+#include "passthrough.pio.h"
 
 // Variables for PIO - sound and detection programs
 static PIO sound_pio;
@@ -16,21 +17,21 @@ static PIO detection_pio;
 static int8_t detection_sm;
 static int detection_offset;
 
-bool load_ftl() {
+bool load_ftl(void) {
 
     // Load PIO programs
-    sound_offset = pio_manager_load(&sound_pio, &sound_sm, &ftl_sound_program);
+    sound_offset = pio_manager_load(&sound_pio, &sound_sm, &dac_program);
     if (sound_offset < 0) {
         return false;
     }
 
-    detection_offset = pio_manager_load(&detection_pio, &detection_sm, &ftl_detection_program);
+    detection_offset = pio_manager_load(&detection_pio, &detection_sm, &passthrough_program);
     if (detection_offset < 0) {
         return false;
     }
 
     // Configure sound PIO GPIO pins
-    pio_sm_config used_config_sound = ftl_sound_program_get_default_config(sound_offset);
+    pio_sm_config used_config_sound = dac_program_get_default_config(sound_offset);
     sm_config_set_in_pins(&used_config_sound, LPT_BASE_PIN);
     sm_config_set_fifo_join(&used_config_sound, PIO_FIFO_JOIN_RX);
     sm_config_set_clkdiv(&used_config_sound, (((float) clock_get_hz(clk_sys)) / (SAMPLE_RATE * 6))); // Frequency same as sample rate
@@ -39,7 +40,7 @@ bool load_ftl() {
         pio_gpio_init(sound_pio, i);
     }
 
-    pio_sm_set_consecutive_pindirs(sound_pio, sound_sm, LPT_BASE_PIN, 8, false); // Set pins in PIO to be inputs/outputs
+    pio_sm_set_consecutive_pindirs(sound_pio, sound_sm, LPT_BASE_PIN, 8, false); // Set pins in PIO to be inputs
 
     // Start sound PIO program
     if (pio_sm_init(sound_pio, sound_sm, sound_offset, &used_config_sound) < 0) {
@@ -49,7 +50,7 @@ bool load_ftl() {
     pio_sm_set_enabled(sound_pio, sound_sm, true);
 
     // Configure detection PIO GPIO pins
-    pio_sm_config used_config_detection = ftl_detection_program_get_default_config(detection_offset);
+    pio_sm_config used_config_detection = passthrough_program_get_default_config(detection_offset);
     sm_config_set_in_pins(&used_config_detection, LPT_SELIN_PIN);
     sm_config_set_out_pins(&used_config_detection, LPT_PAPEREND_PIN, 1);
     sm_config_set_clkdiv(&used_config_detection, 10.0);
@@ -68,13 +69,13 @@ bool load_ftl() {
     return true;
 }
 
-bool unload_ftl() {
+bool unload_ftl(void) {
 
     // Stop PIO programs
     pio_sm_set_enabled(sound_pio, sound_sm, false);
     pio_sm_set_enabled(detection_pio, detection_sm, false);
-    pio_manager_unload(sound_pio, sound_sm, sound_offset, &ftl_sound_program);
-    pio_manager_unload(detection_pio, detection_sm, detection_offset, &ftl_detection_program);
+    pio_manager_unload(sound_pio, sound_sm, sound_offset, &dac_program);
+    pio_manager_unload(detection_pio, detection_sm, detection_offset, &passthrough_program);
 
     // Deinit all GPIO pins
     for (int i = LPT_BASE_PIN; i < LPT_BASE_PIN + 8; i++) {
@@ -86,42 +87,8 @@ bool unload_ftl() {
     return true;
 }
 
-static inline int16_t read_sample(void) {
-
-    // Wait for sample (generated continuosly -> will not lock)
-    while (pio_sm_is_rx_fifo_empty(sound_pio, sound_sm)) {
-        tight_loop_contents();
-    }
-
-    // If all pins low -> empty sample, otherwise subtract 128 (to generate negative amplitude)
-    uint8_t result = ((pio_sm_get(sound_pio, sound_sm) >> 24) & 0xFF);
-    return (result == 0) ? 0 : ((result - 128) << 6);
-}
-
-// Return middle value to remove random wrong reads
-static inline int16_t best_sample(int16_t a, int16_t b, int16_t c) {
-    int16_t max_ab = (a < b) ? b : a;
-    int16_t min_ab = (a < b) ? a : b;
-
-    if (c >= max_ab) {
-        return max_ab;
-    }
-
-    if (c >= min_ab) {
-        return c;
-    }
-
-    return min_ab;
-}
-
-size_t generate_ftl(int16_t *left_sample, int16_t *right_sample) {
-    int16_t sample1 = read_sample();
-    int16_t sample2 = read_sample();
-    int16_t sample3 = read_sample();
-    int16_t current_sample = best_sample(sample1, sample2, sample3);
-    *left_sample = current_sample;
-    *right_sample = current_sample;
-    return 0;
+void generate_ftl(int16_t *left_sample, int16_t *right_sample) {
+    dac_generate_sample(sound_pio, sound_sm, left_sample, right_sample);
 }
 
 device_t *create_ftl(void) {

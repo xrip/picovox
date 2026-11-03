@@ -1,7 +1,6 @@
 #include "config.h"
 #include <stdint.h>
 #include <stdbool.h>
-#include <stdlib.h>
 #include "pio_manager.h"
 #include "ringbuffer.h"
 #include "device.h"
@@ -43,15 +42,6 @@ static void load_new_instruction(tandy_t *device) {
     tandy_write(device, pio_sm_get(sound_pio, sound_sm) >> 24);
 }
 
-static void reset_chip(tandy_t **device) {
-    if (device == NULL) {
-        return;
-    }
-
-    tandy_destroy(*device);
-    *device = tandy_create();
-}
-
 static void core1_operation(void) {
     tandy_t *device = tandy_create();
     int32_t current_sample = 0;
@@ -77,7 +67,7 @@ static void core1_operation(void) {
     tandy_destroy(device);
 }
 
-bool load_tandy() {
+bool load_tandy(void) {
     ringbuffer_init(TND_RINGBUFFER_SIZE);
 
     // Load PIO programs
@@ -145,7 +135,7 @@ bool load_tandy() {
     return true;
 }
 
-bool unload_tandy() {
+bool unload_tandy(void) {
 
     // Stop core 1
     stop_core1 = true;
@@ -169,7 +159,7 @@ bool unload_tandy() {
     return true;
 }
 
-size_t generate_tandy(int16_t *left_sample, int16_t *right_sample) {
+void generate_tandy(int16_t *left_sample, int16_t *right_sample) {
 
     if (sample_used >= SAMPLE_REPEAT) {
 
@@ -189,7 +179,6 @@ size_t generate_tandy(int16_t *left_sample, int16_t *right_sample) {
     *left_sample = last_sample;
     *right_sample = last_sample;
     sample_used++;
-    return 0;
 }
 
 device_t *create_tandy(void) {

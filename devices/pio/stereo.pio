@@ -26,15 +26,3 @@
     in pins, 8              ; Read data (D0-D7)
     push block              ; Send data
 .wrap
-
-.program stereo_detection
-
-; Stereo-On-1 - Detection part
-; INPUTS: D7
-; OUTPUTS: BUSY
-
-.wrap_target
-    in pins, 1              ; Get D7 state
-    mov osr, isr            ; Copy state (default regs of input and output)
-    out pins, 1             ; Set BUSY to same state
-.wrap

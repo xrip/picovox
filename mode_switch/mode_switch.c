@@ -1,12 +1,10 @@
 #include "config.h"
-#include <stdio.h>
 #include <stdint.h>
-#include <stdlib.h>
+#include <stdbool.h>
 #include "device.h"
 #include "pico/stdlib.h"
 #include "pio_manager.h"
 #include "mode_switch.h"
-#include "hardware/clocks.h"
 #include "mode_switch.pio.h"
 
 // Variables for PIO
@@ -14,7 +12,7 @@ static PIO used_pio;
 static int8_t used_sm;
 static int used_offset;
 
-bool init_mode_change() {
+bool init_mode_change(void) {
 
     // Load PIO program
     used_offset = pio_manager_load(&used_pio, &used_sm, &mode_switch_program);
@@ -58,15 +56,13 @@ bool init_mode_change() {
     return true;
 }
 
-// Parity bit is the lowest bit -> if XOR of whole is 1, error occured
+// Even parity: XOR of all 8 bits (7 command bits + lowest parity bit) must be 0
 static bool check_parity(uint8_t command) {
-    bool result = true;
-
-    for (int i = 7; i >= 0; i--) {
-        result ^= ((command >> i) & 1);
-    }
-
-    return result;
+    uint8_t bits = command;
+    bits ^= bits >> 4;
+    bits ^= bits >> 2;
+    bits ^= bits >> 1;
+    return (bits & 1) == 0;
 }
 
 static void send_number(int8_t current) {
@@ -112,18 +108,18 @@ void mode_change(int8_t *change_to, int8_t current, device_t ** device_list) {
     // Change emulated device
     if ((wanted_mode >> 6) == 3) {
         uint8_t wanted_device = ((wanted_mode >> 1) & 31) - 2;
-        *change_to = (wanted_device >= 0 && wanted_device < 9) ? wanted_device : 0;
+        *change_to = (wanted_device < DEVICE_COUNT) ? wanted_device : 0;
         return;
     }
 
     // Return status
     if (wanted_mode == 170) {
         sleep_ms(50);
-        if (current == 1) { // Used for devices that use BUSY pin in GPIO
+        if (current == DEVICE_STEREO) { // Stereo uses the BUSY pin in GPIO, not PIO
             device_list[current]->unload_device();
         }
         send_number(current);
-        if (current == 1) {
+        if (current == DEVICE_STEREO) {
             device_list[current]->load_device();
         }
         return;

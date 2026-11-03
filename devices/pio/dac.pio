@@ -1,0 +1,10 @@
+.program dac
+
+; Free-running LPT sampler for DAC devices (Covox Speech Thing, FTL Sound Adapter)
+; INPUTS: D0-D7 (sampling rate set by clkdiv in C)
+; OUTPUTS: none
+
+.wrap_target
+    in pins, 8      ; Read data (D0-D7)
+    push block      ; Send data
+.wrap

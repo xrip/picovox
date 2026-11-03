@@ -1,7 +1,6 @@
 #include "config.h"
 #include <stdint.h>
 #include <stdbool.h>
-#include <stdlib.h>
 #include "device.h"
 #include "pio_manager.h"
 #include "ringbuffer.h"
@@ -38,21 +37,12 @@ static void load_new_instruction(int16_t *register_address, DBOPL_Device* opl) {
 
     uint16_t new_instruction = (pio_sm_get(used_pio, used_sm) >> 22);
 
-    // Strobe determines address/data difference
-#if LPT_STROBE_SWAPPED
-    if ((new_instruction & 1) == 0) {
-        *register_address = (new_instruction >> 1) & 255;
-    } else {
-        OPL_Pico_WriteRegister(*register_address, ((new_instruction >> 1) & 255));
-    }
-#else
-
+    // Strobe (bit 9) determines address/data difference
     if (((new_instruction >> 9) & 1) == 0) {
         *register_address = ((new_instruction >> 1) & 255) + ((new_instruction & 1) * 0x100);
     } else {
         dbopl_write_reg(opl, *register_address, ((new_instruction >> 1) & 255));
     }
-#endif
 }
 
 static void core1_operation(void) {
@@ -83,7 +73,7 @@ static void core1_operation(void) {
     dbopl_destroy(opl);
 }
 
-bool load_opl3() {
+bool load_opl3(void) {
     ringbuffer_init(OPL_RINGBUFFER_SIZE);
 
     // Load PIO program
@@ -95,11 +85,7 @@ bool load_opl3() {
 
     // Configure PIO GPIO pins
     pio_sm_config used_config = opl3_program_get_default_config(used_offset);
-#if LPT_STROBE_SWAPPED
-    sm_config_set_in_pins(&used_config, LPT_STROBE_PIN);
-#else
     sm_config_set_in_pins(&used_config, LPT_BASE_PIN);
-#endif
     sm_config_set_fifo_join(&used_config, PIO_FIFO_JOIN_RX);
 
     for (int i = LPT_BASE_PIN; i < LPT_BASE_PIN + 8; i++) { // Set all data pins
@@ -108,11 +94,7 @@ bool load_opl3() {
 
     pio_gpio_init(used_pio, LPT_STROBE_PIN);
     pio_gpio_init(used_pio, LPT_INIT_PIN);
-#if LPT_STROBE_SWAPPED
-    pio_sm_set_consecutive_pindirs(used_pio, used_sm, LPT_STROBE_PIN, 9, false); // Set pins in PIO to be inputs
-#else
     pio_sm_set_consecutive_pindirs(used_pio, used_sm, LPT_BASE_PIN, 9, false); // Set pins in PIO to be inputs
-#endif
 
     // Start PIO program
     if (pio_sm_init(used_pio, used_sm, used_offset, &used_config) < 0) {
@@ -128,7 +110,7 @@ bool load_opl3() {
     return true;
 }
 
-bool unload_opl3() {
+bool unload_opl3(void) {
 
     // Stop core 1
     stop_core1 = true;
@@ -147,7 +129,7 @@ bool unload_opl3() {
     return true;
 }
 
-size_t generate_opl3(int16_t *left_sample, int16_t *right_sample) {
+void generate_opl3(int16_t *left_sample, int16_t *right_sample) {
 
     if (sample_used >= SAMPLE_REPEAT) {
 
@@ -174,7 +156,6 @@ size_t generate_opl3(int16_t *left_sample, int16_t *right_sample) {
     *left_sample = last_left_sample;
     *right_sample = last_right_sample;
     sample_used++;
-    return 0;
 }
 
 device_t *create_opl3(void) {
