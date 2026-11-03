@@ -52,9 +52,8 @@ add_executable(picovox
         devices/dss.c 
         devices/opl2.c 
         devices/opl3.c 
-        devices/tandy.c 
-        devices/cms.c 
-        devices/sid.c 
+        devices/tandy.c
+        devices/cms.c
         mode_switch/mode_switch.c
         square/square.cpp 
         square/square_c.cpp
@@ -76,15 +75,14 @@ target_compile_options(picovox PRIVATE
 
 # Add all PIOs to compile
 pico_generate_pio_header(${PROJECT_NAME}
-    ${PIO_PATH}/covox.pio
+    ${PIO_PATH}/dac.pio
+    ${PIO_PATH}/passthrough.pio
     ${PIO_PATH}/stereo.pio
-    ${PIO_PATH}/ftl.pio
     ${PIO_PATH}/dss.pio
     ${PIO_PATH}/opl2.pio
     ${PIO_PATH}/opl3.pio
     ${PIO_PATH}/tandy.pio
     ${PIO_PATH}/cms.pio
-    ${PIO_PATH}/sid.pio
     ${CMAKE_CURRENT_LIST_DIR}/mode_switch/mode_switch.pio
 )
 

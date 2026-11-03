@@ -1,7 +1,6 @@
 #include "config.h"
 #include <stdint.h>
 #include <stdbool.h>
-#include <stdlib.h>
 #include "pio_manager.h"
 #include "ringbuffer.h"
 #include "device.h"
@@ -25,7 +24,6 @@ static int8_t second_sm;
 static int second_offset;
 
 // Since emulator runs at half the rate, repeat all samples twice
-static int16_t last_sample = 0;
 static int8_t sample_used = 0;
 
 // Killswitch for core 1
@@ -34,31 +32,18 @@ static volatile bool stop_core1 = false;
 // Chip emulation - running on core 1
 static void write_to_chip(gameblaster_t *device, int16_t current_instruction, bool first) {
     uint32_t address = 0x220; // Address as in CMS -> determines chip number and address/data selection
-    uint8_t data = 0;
 
     // Determines first or second chip
     if (!first) {
         address += 0x2;
     }
 
-
-    // Determines address or data write
-#if LPT_STROBE_SWAPPED
-    if ((current_instruction & 1) == 1) {
-        address += 0x1;
-        data = (current_instruction >> 1) & 255;
-    } else {
-        data = (current_instruction >> 1) & 255;
-    }
-#else
+    // Strobe (bit 8) determines address or data write
     if (((current_instruction >> 8) & 1) == 1) {
         address += 0x1;
-        data = (current_instruction) & 255;
-    } else {
-        data = (current_instruction) & 255;
     }
-#endif
 
+    uint8_t data = current_instruction & 255;
     gameblaster_write(device, address, data);
 }
 
@@ -79,7 +64,6 @@ static void core1_operation(void) {
     gameblaster_t *device = gameblaster_create();
     int32_t current_left_sample = 0;
     int32_t current_right_sample = 0;
-    int16_t register_address = 0;
 
     while (!stop_core1) {
 
@@ -103,29 +87,25 @@ static void core1_operation(void) {
     gameblaster_destroy(device);
 }
 
-bool load_cms() {
+bool load_cms(void) {
     ringbuffer_init(CMS_RINGBUFFER_SIZE);
 
     // Load PIO programs (each chip has its own)
-    first_offset = pio_manager_load(&first_pio, &first_sm, &cms_one_program);
+    first_offset = pio_manager_load(&first_pio, &first_sm, &cms_program);
 
     if (first_offset < 0) {
         return false;
     }
 
-    second_offset = pio_manager_load(&second_pio, &second_sm, &cms_two_program);
+    second_offset = pio_manager_load(&second_pio, &second_sm, &cms_program);
 
     if (second_offset < 0) {
         return false;
     }
 
     // Configure first PIO GPIO pins
-    pio_sm_config first_config = cms_one_program_get_default_config(first_offset);
-#if LPT_STROBE_SWAPPED
-    sm_config_set_in_pins(&first_config, LPT_STROBE_PIN);
-#else
+    pio_sm_config first_config = cms_program_get_default_config(first_offset);
     sm_config_set_in_pins(&first_config, LPT_BASE_PIN);
-#endif
     sm_config_set_fifo_join(&first_config, PIO_FIFO_JOIN_RX);
     sm_config_set_jmp_pin(&first_config, LPT_AUTOFEED_PIN);
 
@@ -137,11 +117,7 @@ bool load_cms() {
     pio_gpio_init(first_pio, LPT_INIT_PIN);
     pio_gpio_init(first_pio, LPT_AUTOFEED_PIN);
 
-#if LPT_STROBE_SWAPPED
-    pio_sm_set_consecutive_pindirs(first_pio, first_sm, LPT_STROBE_PIN, 9, false); // Set pins in PIO to be inputs
-#else
     pio_sm_set_consecutive_pindirs(first_pio, first_sm, LPT_BASE_PIN, 9, false); // Set pins in PIO to be inputs
-#endif
 
     // Start first PIO program
     if (pio_sm_init(first_pio, first_sm, first_offset, &first_config) < 0) {
@@ -151,12 +127,8 @@ bool load_cms() {
     pio_sm_set_enabled(first_pio, first_sm, true);
 
     // Configure second PIO GPIO pins
-    pio_sm_config second_config = cms_two_program_get_default_config(second_offset);
-#if LPT_STROBE_SWAPPED
-    sm_config_set_in_pins(&second_config, LPT_STROBE_PIN);
-#else
+    pio_sm_config second_config = cms_program_get_default_config(second_offset);
     sm_config_set_in_pins(&second_config, LPT_BASE_PIN);
-#endif
     sm_config_set_fifo_join(&second_config, PIO_FIFO_JOIN_RX);
     sm_config_set_jmp_pin(&second_config, LPT_SELIN_PIN);
 
@@ -168,11 +140,7 @@ bool load_cms() {
     pio_gpio_init(second_pio, LPT_INIT_PIN);
     pio_gpio_init(second_pio, LPT_SELIN_PIN);
 
-#if LPT_STROBE_SWAPPED
-    pio_sm_set_consecutive_pindirs(second_pio, second_sm, LPT_STROBE_PIN, 9, false); // Set pins in PIO to be inputs
-#else
     pio_sm_set_consecutive_pindirs(second_pio, second_sm, LPT_BASE_PIN, 9, false); // Set pins in PIO to be inputs
-#endif
 
     // Start second PIO program
     if (pio_sm_init(second_pio, second_sm, second_offset, &second_config) < 0) {
@@ -188,17 +156,17 @@ bool load_cms() {
     return true;
 }
 
-bool unload_cms() {
+bool unload_cms(void) {
 
     // Stop core 1
     stop_core1 = true;
 
     // Stop PIO programs
     pio_sm_set_enabled(first_pio, first_sm, false);
-    pio_manager_unload(first_pio, first_sm, first_offset, &cms_one_program);
+    pio_manager_unload(first_pio, first_sm, first_offset, &cms_program);
 
     pio_sm_set_enabled(second_pio, second_sm, false);
-    pio_manager_unload(second_pio, second_sm, second_offset, &cms_two_program);
+    pio_manager_unload(second_pio, second_sm, second_offset, &cms_program);
 
     // Deinit all GPIO pins
     for (int i = LPT_BASE_PIN; i < LPT_BASE_PIN + 8; i++) {
@@ -212,7 +180,7 @@ bool unload_cms() {
     return true;
 }
 
-size_t generate_cms(int16_t *left_sample, int16_t *right_sample) {
+void generate_cms(int16_t *left_sample, int16_t *right_sample) {
 
     if (sample_used >= SAMPLE_REPEAT) {
 
@@ -239,7 +207,6 @@ size_t generate_cms(int16_t *left_sample, int16_t *right_sample) {
     }
 
     sample_used++;
-    return 0;
 }
 
 device_t *create_cms(void) {

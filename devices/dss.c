@@ -1,7 +1,6 @@
 #include "config.h"
 #include <stdint.h>
 #include <stdbool.h>
-#include <stdlib.h>
 #include "pio_manager.h"
 #include "ringbuffer.h"
 #include "device.h"
@@ -21,7 +20,7 @@ static int used_offset;
 static int8_t used_pio_irq;
 
 // Sample repeating -> DSS has 7 kHz, Picovox 96 kHz -> not precise division
-repeating_timer_t dss_buffer_timer;
+static repeating_timer_t dss_buffer_timer;
 static int16_t current_sample = 0;
 static int16_t repeated_sample = 0;
 static double sample_repeated = 0;
@@ -60,7 +59,7 @@ static bool new_sample(repeating_timer_t *timer_for_buffer) {
     return true;
 }
 
-bool load_dss() {
+bool load_dss(void) {
     ringbuffer_init(DSS_RINGBUFFER_SIZE);
 
     // Load PIO program
@@ -73,7 +72,6 @@ bool load_dss() {
     pio_sm_config used_config = dss_program_get_default_config(used_offset);
     sm_config_set_in_pins(&used_config, LPT_BASE_PIN);
     sm_config_set_fifo_join(&used_config, PIO_FIFO_JOIN_RX);
-    sm_config_set_jmp_pin(&used_config, LPT_SELIN_PIN);
 
     for (int i = LPT_BASE_PIN; i < LPT_BASE_PIN + 8; i++) { // Set all data pins
         pio_gpio_init(used_pio, i);
@@ -101,7 +99,7 @@ bool load_dss() {
     return true;
 }
 
-bool unload_dss() {
+bool unload_dss(void) {
 
     // Stop buffer unloading
     cancel_repeating_timer(&dss_buffer_timer);
@@ -135,7 +133,7 @@ static inline void correct_sample(void) {
     if (sample_repeated > DSS_RATE_TO_SAMPLE) {
 
         while (!is_new_sample) {
-            tight_loop_contents;
+            tight_loop_contents();
         }
 
         sample_repeated -= DSS_RATE_TO_SAMPLE;
@@ -146,11 +144,10 @@ static inline void correct_sample(void) {
     sample_repeated++;
 }
 
-size_t generate_dss(int16_t *left_sample, int16_t *right_sample) {
+void generate_dss(int16_t *left_sample, int16_t *right_sample) {
     correct_sample();
     *left_sample = repeated_sample;
     *right_sample = repeated_sample;
-    return 0;
 }
 
 device_t *create_dss(void) {

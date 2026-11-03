@@ -5,10 +5,10 @@
 
 /**
  * @brief Initializes the PIO program and pins for mode changing.
- * 
+ *
  * @return true if everything succeeded, false if not.
  */
-bool init_mode_change();
+bool init_mode_change(void);
 
 /**
  * @brief Function reading FIFO for called changes and handling these instructions.

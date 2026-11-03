@@ -12,33 +12,22 @@
 #include "pico/audio_i2s.h"
 #include "device.h"
 #include "hardware/clocks.h"
-#include "hardware/vreg.h"
 #include "mode_switch/mode_switch.h"
 
 // List of all devices
-#define NUM_DEVICES 9
-device_t *devices[NUM_DEVICES];
-int8_t current_device = 4;
-int8_t wanted_device = 4;
+device_t *devices[DEVICE_COUNT];
+int8_t current_device = DEVICE_OPL2;
+int8_t wanted_device = DEVICE_OPL2;
 
-bool load_device_list() {
-    devices[0] = create_covox();
-    devices[1] = create_stereo();
-    devices[2] = create_ftl();
-    devices[3] = create_dss();
-    devices[4] = create_opl2();
-    devices[5] = create_tandy();
-    devices[6] = create_cms();
-    devices[7] = create_opl3();
-    devices[8] = create_sid();
-
-    for (int i = 0; i < NUM_DEVICES; i++) {
-        if (devices[i] == NULL) {
-            return false;
-        }
-    }
-
-    return true;
+void load_device_list(void) {
+    devices[DEVICE_COVOX] = create_covox();
+    devices[DEVICE_STEREO] = create_stereo();
+    devices[DEVICE_FTL] = create_ftl();
+    devices[DEVICE_DSS] = create_dss();
+    devices[DEVICE_OPL2] = create_opl2();
+    devices[DEVICE_TANDY] = create_tandy();
+    devices[DEVICE_CMS] = create_cms();
+    devices[DEVICE_OPL3] = create_opl3();
 }
 
 bool change_device(void) {
@@ -108,11 +97,9 @@ int main() {
     sleep_ms(100);
     stdio_init_all();
 
-    if (!load_device_list()) {
-        return 1;
-    }
+    load_device_list();
 
-    if (!devices[current_device]->load_device(devices[current_device])) {
+    if (!devices[current_device]->load_device()) {
         return 1;
     }
 
@@ -123,8 +110,6 @@ int main() {
     }
 
     init_mode_change();
-
-    //load_change_device_irq();
 
     unmute_device();
     

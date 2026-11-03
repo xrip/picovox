@@ -4,8 +4,10 @@
 #define SAMPLE_RATE 96000
 
 // Definitions of GPIO LPT pins
+// Beware! The PIO programs hardcode the control pin positions (absolute GPIO numbers),
+// so STROBE must directly follow the DATA pins (LPT_BASE_PIN + 8).
 #define LPT_BASE_PIN 1
-#define LPT_STROBE_PIN 9    // Beware! STROBE pin must be exactly one position before or after the DATA pins! (Check control down.)
+#define LPT_STROBE_PIN 9
 #define LPT_AUTOFEED_PIN 10
 #define LPT_INIT_PIN 11
 #define LPT_SELIN_PIN 12
@@ -19,7 +21,6 @@
 
 // Definitions of GPIO I2S pins
 #define PICO_AUDIO_I2S_CLOCK_PIN_BASE 27
-#define PICO_AUDIO_I2S_CLOCK_PINS_SWAPPED 0
 #define PICO_AUDIO_I2S_DATA_PIN 26
 
 // Definition of unused pin
@@ -27,17 +28,5 @@
 
 // Defnition of Volume Mute button
 #define PICO_AUDIO_MUTE 29
-
-// Definitions of GPIO mode switch button (GPIO - ground)
-#define CHANGE_BUTTON_PIN 18
-
-// Control of correct LPT_STROBE_PIN definition
-#if LPT_STROBE_PIN == (LPT_BASE_PIN - 1)
-    #define LPT_STROBE_SWAPPED 1
-#elif LPT_STROBE_PIN == (LPT_BASE_PIN + 8)
-    #define LPT_STROBE_SWAPPED 0
-#else
-    #error "STROBE pin must be either LPT_BASE_PIN-1 or LPT_BASE_PIN+8"
-#endif
 
 #endif // CONFIG_H

@@ -1,0 +1,12 @@
+.program passthrough
+
+; Mirrors one input pin to one output pin (both pins set from C)
+; Used for detection lines (FTL: SELIN->PE, Stereo-On-1: D7->BUSY)
+; INPUTS: 1 pin
+; OUTPUTS: 1 pin
+
+.wrap_target
+    in pins, 1      ; Get input pin state
+    mov osr, isr    ; Copy state (default regs of input and output)
+    out pins, 1     ; Set output to same state
+.wrap
